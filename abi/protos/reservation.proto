@@ -1,0 +1,136 @@
+syntax = "proto3";
+package reservation;
+
+import "google/protobuf/timestamp.proto";
+
+// reservation status for a given time period
+enum ReservationStatus {
+    RESERVATION_STATUS_UNDEFINED = 0;
+    RESERVATION_STATUS_PENDING = 1;
+    RESERVATION_STATUS_CONFIRMED = 2;
+    RESERVATION_STATUS_BLOCKED = 3;
+}
+
+// when a reservation is changed, store the type of change
+enum ReservationUpdateType {
+    RESERVATION_UPDATE_TYPE_UNDEFINED = 0;
+    RESERVATION_UPDATE_TYPE_CREATE = 1;
+    RESERVATION_UPDATE_TYPE_UPDATE = 2;
+    RESERVATION_UPDATE_TYPE_DELETE = 3;
+}
+
+// core reservation object
+// if put into ReservationRequest, id is ignored[should be empty]
+// if ListenResponse, option is DELETE, only id will be populated
+message Reservation {
+    // unique id for a reservation
+    string id = 1;
+    // user id for a reservation
+    string user_id = 2;
+    // reservation status for a given time period
+    ReservationStatus status = 3;
+
+    // resource id for a reservation
+    string resource_id = 4;
+    // resource reservation window
+    // start time for a reservation
+    google.protobuf.Timestamp start = 5;
+    // end time for a reservation
+    google.protobuf.Timestamp end = 6;
+
+    // extra note
+    string note = 7;
+}
+
+// to make a reservation, send a ReservationRequest with Reservation object (id should be empty)
+message ReserveRequest {
+    Reservation reservation = 1;
+}
+
+// create a reservation, will be returned in ReserveResponse
+message ReserveResponse {
+    Reservation reservation = 1;
+}
+
+// to change a reservation from pending to confirmed, send a ConfirmRequest with id (what id?)
+message ConfirmRequest {
+    string id = 1;
+}
+
+// confirm a reservation, will be returned in ConfirmResponse
+message ConfirmResponse {
+    Reservation reservation = 1;
+}
+
+// to update a reservation, send a UpdateRequest. Only note can be updated
+message UpdateRequest {
+    string note = 1;
+}
+
+// update a reservation, will be returned in UpdateResponse
+message UpdateResponse {
+    Reservation reservation = 1;
+}
+
+// to cancel a reservation, send a CancelRequest with id (what id?)
+message CancelRequest {
+    string  id = 1;
+}
+
+// cancel a reservation, will be returned in CancelResponse
+message CancelResponse {
+    Reservation reservation = 1;
+}
+
+// to get a reservation, send a GetRequest with id (what id?)
+message GetRequest {
+    string id = 1;
+}
+
+// get a reservation, will be returned in GetResponse
+message GetResponse {
+    Reservation reservation = 1;
+}
+
+// to query reservations, send a QueryRequest with resource_id, user_id, status, start, end
+message QueryRequest {
+    // resource id for a reservation query, if empty, query all resources
+    string resource_id = 1;
+    // user id for a reservation query, if empty, query all users
+    string user_id = 2;
+    // use status to filter reservations, if unknown, return all reservations
+    ReservationStatus status = 3;
+    // start time for a reservation query, if 0, use Infity for start time
+    google.protobuf.Timestamp start = 4;
+    // end time for a reservation query, if 0, use Infity for end time
+    google.protobuf.Timestamp end = 5;
+}
+
+// client can listen to reservation changes, send a ListenRequest
+message ListenRequest {}
+
+// server will send a ListenResponse to client in streaming response when a reservation is changed
+message ListenResponse {
+    // update type
+    ReservationUpdateType type = 1;
+    // id for updated reservation
+    Reservation reservation = 2;
+}
+
+// Reservation Service
+service ReservationService {
+    // make a reservation
+    rpc reserve(ReserveRequest) returns (ReserveResponse);
+    // confirm a reservation
+    rpc confirm(ConfirmRequest) returns (ConfirmResponse);
+    // update a reservation
+    rpc update(UpdateRequest) returns (UpdateResponse);
+    //  cancel a reservation
+    rpc cancel(CancelRequest) returns (CancelResponse);
+    // get a reservation
+    rpc get(GetRequest) returns (GetResponse);
+    // query reservations
+    rpc query(QueryRequest) returns (stream Reservation);
+    // listen to reservation changes
+    rpc listen(ListenRequest) returns (stream Reservation);
+}
