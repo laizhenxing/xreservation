@@ -92,8 +92,8 @@ message GetResponse {
     Reservation reservation = 1;
 }
 
-// to query reservations, send a QueryRequest with resource_id, user_id, status, start, end
-message QueryRequest {
+// to query reservations, send a ReservationQuery with resource_id, user_id, status, start, end
+message ReservationQuery {
     // resource id for a reservation query, if empty, query all resources
     string resource_id = 1;
     // user id for a reservation query, if empty, query all users
@@ -104,6 +104,10 @@ message QueryRequest {
     google.protobuf.Timestamp start = 4;
     // end time for a reservation query, if 0, use Infity for end time
     google.protobuf.Timestamp end = 5;
+}
+
+message QueryRequest {
+    ReservationQuery query = 1;
 }
 
 // client can listen to reservation changes, send a ListenRequest
