@@ -136,7 +136,7 @@ pub struct ListenResponse {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ReservationStatus {
-    Undefined = 0,
+    Unknown = 0,
     Pending = 1,
     Confirmed = 2,
     Blocked = 3,
@@ -148,7 +148,7 @@ impl ReservationStatus {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            ReservationStatus::Undefined => "RESERVATION_STATUS_UNDEFINED",
+            ReservationStatus::Unknown => "RESERVATION_STATUS_UNKNOWN",
             ReservationStatus::Pending => "RESERVATION_STATUS_PENDING",
             ReservationStatus::Confirmed => "RESERVATION_STATUS_CONFIRMED",
             ReservationStatus::Blocked => "RESERVATION_STATUS_BLOCKED",
@@ -157,7 +157,7 @@ impl ReservationStatus {
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "RESERVATION_STATUS_UNDEFINED" => Some(Self::Undefined),
+            "RESERVATION_STATUS_UNKNOWN" => Some(Self::Unknown),
             "RESERVATION_STATUS_PENDING" => Some(Self::Pending),
             "RESERVATION_STATUS_CONFIRMED" => Some(Self::Confirmed),
             "RESERVATION_STATUS_BLOCKED" => Some(Self::Blocked),
@@ -169,7 +169,7 @@ impl ReservationStatus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ReservationUpdateType {
-    Undefined = 0,
+    Unknown = 0,
     Create = 1,
     Update = 2,
     Delete = 3,
@@ -181,7 +181,7 @@ impl ReservationUpdateType {
     /// (if the ProtoBuf definition does not change) and safe for programmatic use.
     pub fn as_str_name(&self) -> &'static str {
         match self {
-            ReservationUpdateType::Undefined => "RESERVATION_UPDATE_TYPE_UNDEFINED",
+            ReservationUpdateType::Unknown => "RESERVATION_UPDATE_TYPE_UNKNOWN",
             ReservationUpdateType::Create => "RESERVATION_UPDATE_TYPE_CREATE",
             ReservationUpdateType::Update => "RESERVATION_UPDATE_TYPE_UPDATE",
             ReservationUpdateType::Delete => "RESERVATION_UPDATE_TYPE_DELETE",
@@ -190,7 +190,7 @@ impl ReservationUpdateType {
     /// Creates an enum from field names used in the ProtoBuf definition.
     pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
         match value {
-            "RESERVATION_UPDATE_TYPE_UNDEFINED" => Some(Self::Undefined),
+            "RESERVATION_UPDATE_TYPE_UNKNOWN" => Some(Self::Unknown),
             "RESERVATION_UPDATE_TYPE_CREATE" => Some(Self::Create),
             "RESERVATION_UPDATE_TYPE_UPDATE" => Some(Self::Update),
             "RESERVATION_UPDATE_TYPE_DELETE" => Some(Self::Delete),

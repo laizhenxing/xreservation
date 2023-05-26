@@ -26,14 +26,14 @@ We would use gRPC as a service interface. Below is the proto definition:
 syntax = "proto3";
 
 enum ReservationStatus {
-    UNDEFINED = 0;
+    UNKNOWN = 0;
     PENDING = 1;
     CONFIRMED = 2;
     BLOCKED = 3;
 }
 
 enum ReservationUpdateType {
-    UNDEFINED = 0;
+    UNKNOWN = 0;
     CREATE = 1;
     UPDATE = 2;
     DELETE = 3;
@@ -142,7 +142,7 @@ CREATE TABLE rsvp.reservations (
 
     CONSTRAINT reservations_pkey PRIMARY KEY (id),
     -- gist index for exclusion constraint
-    CONSTRAINT reservation_conflict EXCLUDE USING gist (resource_id WITH =, timespan WITH &&),
+    CONSTRAINT reservation_conflict EXCLUDE USING gist (resource_id WITH =, timespan WITH &&)
     -- created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 );
@@ -159,11 +159,11 @@ CREATE OR REPLACE FUNCTION rsvp.query(uid text, rid text, ts: tstzrange) RETURNS
 CREATE TABLE rsvp.reservation_changes (
     id SERIAL NOT NULL,
     reservation_id uuid NOT NULL,
-    op rsvp.reservation_update_type NOT NULL,
+    op rsvp.reservation_update_type NOT NULL
 );
 
 -- trigger for add/update/delate reservation
-CREATE OR REPLACE FUNCTION rsvp.reservation_trigger() RETURNS TRIGGER AS
+CREATE OR REPLACE FUNCTION rsvp.reservations_trigger() RETURNS TRIGGER AS
 $$
 BEGIN
     IF (TG_OP = 'INSERT') THEN
@@ -182,7 +182,11 @@ BEGIN
     NOTIFY reservation_update;
     RETURN NULL;
 END;
-$$
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER reservations_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON rsvp.reservations
+    FOR EACH ROW EXECUTE PROCEDURE rsvp.reservations_trigger();
 ```
 
 Here we use EXCLUDE constraint provided by postgres to ensure that on overlapping reservations cannot be made for a given resource at a given time.

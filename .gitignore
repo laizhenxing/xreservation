@@ -1,3 +1,5 @@
 /target
 /Cargo.lock
-.tokeignore
+/.tokeignore
+/Makefile
+/.env
