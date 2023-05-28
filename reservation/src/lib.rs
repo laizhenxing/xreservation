@@ -13,17 +13,17 @@ pub trait Rsvp {
     /// make a reservation
     async fn reserve(&self, rsvp: abi::Reservation) -> Result<abi::Reservation, Error>;
     /// change reservation status
-    async fn change_status(&self, rsvp: abi::ReservationId) -> Result<abi::Reservation, Error>;
+    async fn change_status(&self, id: abi::ReservationId) -> Result<abi::Reservation, Error>;
     /// update note
     async fn update_note(
         &self,
-        rsvp: abi::ReservationId,
+        id: abi::ReservationId,
         note: String,
     ) -> Result<abi::Reservation, Error>;
     /// delete reservation
-    async fn delete(&self, rsvp: abi::ReservationId) -> Result<(), Error>;
+    async fn delete(&self, id: abi::ReservationId) -> Result<(), Error>;
     /// get reservation by id
-    async fn get(&self, rsvp: abi::ReservationId) -> Result<abi::Reservation, Error>;
+    async fn get(&self, id: abi::ReservationId) -> Result<abi::Reservation, Error>;
     /// query reservations
     async fn query(&self, query: abi::ReservationQuery) -> Result<Vec<abi::Reservation>, Error>;
 }
