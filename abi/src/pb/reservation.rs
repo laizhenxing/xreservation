@@ -98,24 +98,42 @@ pub struct GetResponse {
     pub reservation: ::core::option::Option<Reservation>,
 }
 /// to query reservations, send a ReservationQuery with resource_id, user_id, status, start, end
+#[derive(derive_builder::Builder)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ReservationQuery {
     /// resource id for a reservation query, if empty, query all resources
     #[prost(string, tag = "1")]
+    #[builder(setter(into), default)]
     pub resource_id: ::prost::alloc::string::String,
     /// user id for a reservation query, if empty, query all users
     #[prost(string, tag = "2")]
+    #[builder(setter(into), default)]
     pub user_id: ::prost::alloc::string::String,
     /// use status to filter reservations, if unknown, return all reservations
     #[prost(enumeration = "ReservationStatus", tag = "3")]
+    #[builder(setter(into), default)]
     pub status: i32,
     /// start time for a reservation query, if 0, use Infity for start time
     #[prost(message, optional, tag = "4")]
+    #[builder(setter(strip_option))]
     pub start: ::core::option::Option<::prost_types::Timestamp>,
     /// end time for a reservation query, if 0, use Infity for end time
     #[prost(message, optional, tag = "5")]
+    #[builder(setter(strip_option))]
     pub end: ::core::option::Option<::prost_types::Timestamp>,
+    /// page number for a reservation query, if 0, use 1 for page number
+    #[prost(int32, tag = "6")]
+    #[builder(setter(into), default)]
+    pub page: i32,
+    /// is_desc for a reservation query, if true, use desc for order, otherwise use asc
+    #[prost(bool, tag = "7")]
+    #[builder(setter(into), default)]
+    pub desc: bool,
+    /// page size for a reservation query, if 0, use 10 for page size
+    #[prost(int32, tag = "8")]
+    #[builder(setter(into), default)]
+    pub page_size: i32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
