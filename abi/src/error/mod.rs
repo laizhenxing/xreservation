@@ -16,7 +16,7 @@ pub enum Error {
     InvalidUserId(String),
 
     #[error("Invalid reservation id: {0}")]
-    InvalidReservationId(String),
+    InvalidReservationId(i64),
 
     #[error("Invalid resource id: {0}")]
     InvalidResourceId(String),
@@ -55,7 +55,7 @@ impl PartialEq for Error {
             (Self::DbError(_), Self::DbError(_)) => true,
             (Self::InvalidTimespan, Self::InvalidTimespan) => true,
             (Self::InvalidUserId(a), Self::InvalidUserId(b)) => a == b,
-            (Self::InvalidResourceId(a), Self::InvalidReservationId(b)) => a == b,
+            (Self::InvalidReservationId(a), Self::InvalidReservationId(b)) => a == b,
             (Self::InvalidResourceId(a), Self::InvalidResourceId(b)) => a == b,
             (Self::ConflictReservation(a), Self::ConflictReservation(b)) => a == b,
             (Self::NotFound, Self::NotFound) => true,

@@ -1,7 +1,7 @@
 use crate::{ReservationManager, Rsvp};
 use abi::{Error, Reservation, ReservationId, ReservationQuery, ReservationStatus, Validator};
 use async_trait::async_trait;
-use sqlx::{types::Uuid, Row};
+use sqlx::Row;
 
 #[async_trait]
 impl Rsvp for ReservationManager {
@@ -15,7 +15,7 @@ impl Rsvp for ReservationManager {
         // stauts 默认类型 text, 这里需要转换成 rsvp.reservation_status
         let sql = "INSERT INTO rsvp.reservations (user_id, resource_id, timespan, note, status)
             VALUES ($1, $2, $3, $4, $5::rsvp.reservation_status) RETURNING id";
-        let id: Uuid = sqlx::query(sql)
+        let id: i64 = sqlx::query(sql)
             .bind(rsvp.user_id.clone())
             .bind(rsvp.resource_id.clone())
             .bind(timespan)
@@ -25,22 +25,24 @@ impl Rsvp for ReservationManager {
             .await?
             .get(0);
 
-        rsvp.id = id.to_string();
+        rsvp.id = id;
 
         Ok(rsvp)
     }
 
     async fn change_status(&self, id: ReservationId) -> Result<Reservation, Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| Error::InvalidResourceId(id.clone()))?;
-        let sql = "UPDATE rsvp.reservations SET status = 'confirmed'::rsvp.reservation_status WHERE id = $1::UUID AND status = 'pending' RETURNING *";
+        id.validate()?;
+
+        let sql = "UPDATE rsvp.reservations SET status = 'confirmed'::rsvp.reservation_status WHERE id = $1 AND status = 'pending' RETURNING *";
         let rsvp = sqlx::query_as(sql).bind(id).fetch_one(&self.pool).await?;
 
         Ok(rsvp)
     }
 
     async fn update_note(&self, id: ReservationId, note: String) -> Result<Reservation, Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| Error::InvalidResourceId(id.clone()))?;
-        let sql = "UPDATE rsvp.reservations SET note = $1 WHERE id = $2::UUID RETURNING *";
+        id.validate()?;
+
+        let sql = "UPDATE rsvp.reservations SET note = $1 WHERE id = $2 RETURNING *";
         let rsvp = sqlx::query_as(sql)
             .bind(note)
             .bind(id)
@@ -50,16 +52,18 @@ impl Rsvp for ReservationManager {
     }
 
     async fn delete(&self, id: ReservationId) -> Result<(), Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| Error::InvalidResourceId(id.clone()))?;
-        let sql = "DELETE FROM rsvp.reservations WHERE id = $1::UUID";
+        id.validate()?;
+
+        let sql = "DELETE FROM rsvp.reservations WHERE id = $1";
 
         sqlx::query(sql).bind(id).execute(&self.pool).await?;
         Ok(())
     }
 
     async fn get(&self, id: ReservationId) -> Result<Reservation, Error> {
-        let id = Uuid::parse_str(&id).map_err(|_| Error::InvalidResourceId(id.clone()))?;
-        let sql = "SELECT * FROM rsvp.reservations WHERE id = $1::UUID";
+        id.validate()?;
+
+        let sql = "SELECT * FROM rsvp.reservations WHERE id = $1";
         let rsvp = sqlx::query_as(sql).bind(id).fetch_one(&self.pool).await?;
         Ok(rsvp)
     }
@@ -124,7 +128,7 @@ mod tests {
         );
 
         let rsvp = manager.reserve(rsvp).await.unwrap();
-        assert!(!rsvp.id.is_empty());
+        assert_eq!(rsvp.id, 1);
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
@@ -247,7 +251,7 @@ mod tests {
         )
         .await;
 
-        let rsvp = manager.change_status(rsvp.id.clone()).await.unwrap();
+        let rsvp = manager.change_status(rsvp.id).await.unwrap();
         assert_eq!(rsvp.status, ReservationStatus::Confirmed as i32);
     }
 
@@ -255,11 +259,11 @@ mod tests {
     async fn change_status_should_fail_with_invalid_id() {
         let manager = ReservationManager::new(migrated_pool.clone());
 
-        let err = manager
-            .change_status("invalid-id".to_string())
-            .await
-            .unwrap_err();
-        assert_eq!(err, Error::InvalidReservationId("invalid-id".to_string()));
+        let err = manager.change_status(0).await.unwrap_err();
+        assert_eq!(err, Error::InvalidReservationId(0));
+
+        let err = manager.change_status(5).await.unwrap_err();
+        assert_eq!(err, Error::NotFound);
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
@@ -275,7 +279,7 @@ mod tests {
         .await;
 
         let rsvp = manager
-            .update_note(rsvp.id.clone(), "new-note".to_string())
+            .update_note(rsvp.id, "new-note".to_string())
             .await
             .unwrap();
         assert_eq!(rsvp.note, "new-note".to_string());
@@ -293,7 +297,7 @@ mod tests {
         )
         .await;
 
-        let rsvp = manager.get(rsvp.id.clone()).await.unwrap();
+        let rsvp = manager.get(rsvp.id).await.unwrap();
         assert_eq!(rsvp.id, rsvp.id);
         assert_eq!(rsvp.user_id, "test-user".to_string());
         assert_eq!(rsvp.resource_id, "test-resource".to_string());
@@ -325,9 +329,9 @@ mod tests {
         )
         .await;
 
-        manager.delete(rsvp.id.clone()).await.unwrap();
+        manager.delete(rsvp.id).await.unwrap();
 
-        let err = manager.get(rsvp.id.clone()).await.unwrap_err();
+        let err = manager.get(rsvp.id).await.unwrap_err();
         assert_eq!(err, Error::NotFound);
     }
 
@@ -362,7 +366,7 @@ mod tests {
         assert_eq!(rsvps[0], rsvp);
 
         // 将查到的数据删除,再查询,查不到数据
-        manager.delete(rsvp.id.clone()).await.unwrap();
+        manager.delete(rsvp.id).await.unwrap();
         let rsvps = manager.query(query).await.unwrap();
         assert_eq!(rsvps.len(), 0);
     }

@@ -24,7 +24,7 @@ enum ReservationUpdateType {
 // if ListenResponse, option is DELETE, only id will be populated
 message Reservation {
     // unique id for a reservation
-    string id = 1;
+    int64 id = 1;
     // user id for a reservation
     string user_id = 2;
     // reservation status for a given time period
@@ -54,7 +54,7 @@ message ReserveResponse {
 
 // to change a reservation from pending to confirmed, send a ConfirmRequest with id (what id?)
 message ConfirmRequest {
-    string id = 1;
+    int64 id = 1;
 }
 
 // confirm a reservation, will be returned in ConfirmResponse
@@ -64,7 +64,8 @@ message ConfirmResponse {
 
 // to update a reservation, send a UpdateRequest. Only note can be updated
 message UpdateRequest {
-    string note = 1;
+    int64 id = 1;
+    string note = 2;
 }
 
 // update a reservation, will be returned in UpdateResponse
@@ -74,7 +75,7 @@ message UpdateResponse {
 
 // to cancel a reservation, send a CancelRequest with id (what id?)
 message CancelRequest {
-    string  id = 1;
+    int64 id = 1;
 }
 
 // cancel a reservation, will be returned in CancelResponse
@@ -84,7 +85,7 @@ message CancelResponse {
 
 // to get a reservation, send a GetRequest with id (what id?)
 message GetRequest {
-    string id = 1;
+    int64 id = 1;
 }
 
 // get a reservation, will be returned in GetResponse
