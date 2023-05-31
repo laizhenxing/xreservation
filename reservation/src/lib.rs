@@ -32,9 +32,3 @@ pub trait Rsvp {
         filter: abi::ReservationFilter,
     ) -> Result<(abi::FilterPager, Vec<abi::Reservation>), Error>;
 }
-
-impl ReservationManager {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-}

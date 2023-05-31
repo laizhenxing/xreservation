@@ -1,10 +1,25 @@
 use crate::{ReservationManager, Rsvp};
 use abi::{
-    Error, FilterPager, Reservation, ReservationFilter, ReservationId, ReservationQuery,
+    DbConfig, Error, FilterPager, Reservation, ReservationFilter, ReservationId, ReservationQuery,
     ReservationStatus, Validator,
 };
+
 use async_trait::async_trait;
-use sqlx::Row;
+use sqlx::{pool::PoolOptions, PgPool, Row};
+
+impl ReservationManager {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    pub async fn from_config(config: &DbConfig) -> Result<Self, Error> {
+        let pool = PoolOptions::new()
+            .max_connections(config.max_connections)
+            .connect(&config.url())
+            .await?;
+        Ok(Self::new(pool))
+    }
+}
 
 #[async_trait]
 impl Rsvp for ReservationManager {

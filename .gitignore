@@ -3,3 +3,4 @@
 /.tokeignore
 /Makefile
 /.env
+/reservation.yml
