@@ -95,10 +95,10 @@ message GetResponse {
 
 // to query reservations, send a ReservationQuery with resource_id, user_id, status, start, end
 message ReservationQuery {
-    // resource id for a reservation query, if empty, query all resources
-    string resource_id = 1;
     // user id for a reservation query, if empty, query all users
-    string user_id = 2;
+    string user_id = 1;
+    // resource id for a reservation query, if empty, query all resources
+    string resource_id = 2;
     // use status to filter reservations, if unknown, return all reservations
     ReservationStatus status = 3;
     // start time for a reservation query, if 0, use Infity for start time
@@ -115,6 +115,38 @@ message ReservationQuery {
 
 message QueryRequest {
     ReservationQuery query = 1;
+}
+
+/// filter of reservations, send a FilterQuery with resource_id, user_id, status, start, end
+message ReservationFilter {
+    // user id for a reservation filter, if empty, filter all users
+    string user_id = 1;
+    // resource id for a reservation filter, if empty, filter all resources
+    string resource_id = 2;
+    // use status to filter reservations, if unknown, return all reservations
+    ReservationStatus status = 3;
+    // cursor means the start id for a reservation filter
+    int64 cursor = 4;
+    // page size for a reservation filter
+    int32 page_size = 5;
+    // desc for reservations sort
+    bool desc = 6;
+}
+
+/// query reservations, will be returned in stream Reservation
+message FilterRequest {
+    ReservationFilter filter = 1;
+}
+
+message FilterPager {
+    int64 prev = 1;
+    int64 next = 2;
+    int64 total = 3;
+}
+
+message FilterResponse {
+    repeated Reservation reservations = 1;
+    FilterPager pager = 2;
 }
 
 // client can listen to reservation changes, send a ListenRequest
@@ -142,6 +174,8 @@ service ReservationService {
     rpc get(GetRequest) returns (GetResponse);
     // query reservations
     rpc query(QueryRequest) returns (stream Reservation);
+    // filter reservations
+    rpc filter(FilterRequest) returns (FilterResponse);
     // listen to reservation changes
     rpc listen(ListenRequest) returns (stream Reservation);
 }

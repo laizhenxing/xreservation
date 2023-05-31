@@ -26,6 +26,11 @@ pub trait Rsvp {
     async fn get(&self, id: abi::ReservationId) -> Result<abi::Reservation, Error>;
     /// query reservations
     async fn query(&self, query: abi::ReservationQuery) -> Result<Vec<abi::Reservation>, Error>;
+    /// filter reservations
+    async fn filter(
+        &self,
+        filter: abi::ReservationFilter,
+    ) -> Result<(abi::FilterPager, Vec<abi::Reservation>), Error>;
 }
 
 impl ReservationManager {

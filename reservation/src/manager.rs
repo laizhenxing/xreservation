@@ -1,5 +1,8 @@
 use crate::{ReservationManager, Rsvp};
-use abi::{Error, Reservation, ReservationId, ReservationQuery, ReservationStatus, Validator};
+use abi::{
+    Error, FilterPager, Reservation, ReservationFilter, ReservationId, ReservationQuery,
+    ReservationStatus, Validator,
+};
 use async_trait::async_trait;
 use sqlx::Row;
 
@@ -90,6 +93,61 @@ impl Rsvp for ReservationManager {
 
         Ok(rsvps)
     }
+
+    /// filter reservations by user_id, resource_id, status, cursor, desc, page_size
+    async fn filter(
+        &self,
+        filter: ReservationFilter,
+    ) -> Result<(FilterPager, Vec<Reservation>), Error> {
+        let uid = str_to_option(&filter.user_id);
+        let rid = str_to_option(&filter.resource_id);
+        let status =
+            ReservationStatus::from_i32(filter.status).unwrap_or(ReservationStatus::Pending);
+        // page_size must between 10 and 100
+        let page_size = if filter.page_size < 10 || filter.page_size > 100 {
+            10
+        } else {
+            filter.page_size
+        };
+
+        let rsvps: Vec<Reservation> = sqlx::query_as(
+            "SELECT * FROM rsvp.filter($1, $2, $3::rsvp.reservation_status, $4, $5, $6)",
+        )
+        .bind(uid)
+        .bind(rid)
+        .bind(status.to_string())
+        .bind(filter.cursor)
+        .bind(filter.desc)
+        .bind(page_size)
+        .fetch_all(&self.pool)
+        .await?;
+
+        // TODO: incomplete FilterPager
+        // if the first id is current cursor, then there is have prev, start from 1
+        // if len - start > page_size, then there is have next, end at len-1
+        let has_pre = !rsvps.is_empty() && rsvps[0].id == filter.cursor;
+        let start = if has_pre { 1 } else { 0 };
+
+        let has_next = (rsvps.len() - start) as i32 > page_size;
+        let end = if has_next {
+            rsvps.len() - 1
+        } else {
+            rsvps.len()
+        };
+
+        let prev = if has_pre { rsvps[start - 1].id } else { -1 };
+        let next = if has_next { rsvps[end - 1].id } else { -1 };
+
+        let result = rsvps[start..end].to_vec();
+
+        let pager = FilterPager {
+            prev,
+            next,
+            // TODO: get total from an efficient way instead of query all
+            total: 0,
+        };
+        Ok((pager, result))
+    }
 }
 
 fn str_to_option(s: &str) -> Option<&str> {
@@ -103,6 +161,7 @@ fn str_to_option(s: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use abi::ReservationFilterBuilder;
     use abi::{
         convert_to_timestamp, Error, Reservation, ReservationConflict, ReservationConflictInfo,
         ReservationQueryBuilder, ReservationWindow,
@@ -371,6 +430,73 @@ mod tests {
         assert_eq!(rsvps.len(), 0);
     }
 
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn filter_reservation_should_work() {
+        let manager = ReservationManager::new(migrated_pool.clone());
+        let rsvps = make_reservations(migrated_pool.clone()).await;
+
+        let filter = ReservationFilterBuilder::default()
+            .user_id("test-user")
+            .resource_id("test-resource")
+            .status(ReservationStatus::Pending as i32)
+            .cursor(0)
+            .desc(false)
+            .build()
+            .unwrap();
+
+        let (_pager, res) = manager.filter(filter).await.unwrap();
+        assert_eq!(rsvps.len(), res.len());
+
+        let filter = ReservationFilterBuilder::default()
+            .user_id("test-user")
+            .resource_id("test-resource")
+            .status(ReservationStatus::Pending as i32)
+            .cursor(3)
+            .desc(false)
+            .build()
+            .unwrap();
+        let (_pager, res) = manager.filter(filter).await.unwrap();
+        assert_eq!(rsvps.len() - 3, res.len());
+
+        let filter = ReservationFilterBuilder::default()
+            .user_id("test-user")
+            .resource_id("test-resource")
+            .status(ReservationStatus::Pending as i32)
+            .cursor(3)
+            .desc(true)
+            .build()
+            .unwrap();
+        let (_pager, res) = manager.filter(filter).await.unwrap();
+        assert_eq!(2, res.len());
+    }
+
+    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    async fn filter_reservation_with_null_cursor_should_work() {
+        let manager = ReservationManager::new(migrated_pool.clone());
+        let rsvps = make_reservations(migrated_pool.clone()).await;
+        let filter_asc = ReservationFilterBuilder::default()
+            .user_id("test-user")
+            .resource_id("test-resource")
+            .status(ReservationStatus::Pending as i32)
+            .desc(false)
+            .build()
+            .unwrap();
+
+        // if cursor is null, it should be treated as 0
+        let filter_desc = ReservationFilterBuilder::default()
+            .user_id("test-user")
+            .resource_id("test-resource")
+            .status(ReservationStatus::Pending as i32)
+            .desc(true)
+            .build()
+            .unwrap();
+        let (_asc_pager, res_asc) = manager.filter(filter_asc).await.unwrap();
+        let (_desc_pager, res_desc) = manager.filter(filter_desc).await.unwrap();
+
+        assert_eq!(rsvps.len(), res_asc.len());
+        assert_eq!(res_desc.len(), 0);
+    }
+
     #[allow(dead_code)]
     async fn make_test_reservation(migrated_pool: PgPool) -> (Reservation, ReservationManager) {
         make_reservation(
@@ -382,6 +508,35 @@ mod tests {
             "test-note",
         )
         .await
+    }
+
+    async fn make_reservations(migrated_pool: PgPool) -> Vec<Reservation> {
+        let mut rsvps = Vec::new();
+        let ts = vec![
+            ("2023-01-01T10:10:10-0800", "2023-01-02T10:10:10-0800"),
+            ("2023-01-03T10:10:10-0800", "2023-01-04T10:10:10-0800"),
+            ("2023-01-05T10:10:10-0800", "2023-01-06T10:10:10-0800"),
+            ("2023-01-07T10:10:10-0800", "2023-01-08T10:10:10-0800"),
+            ("2023-01-09T10:10:10-0800", "2023-01-10T10:10:10-0800"),
+            ("2023-01-11T10:10:10-0800", "2023-01-12T10:10:10-0800"),
+            ("2023-01-13T10:10:10-0800", "2023-01-14T10:10:10-0800"),
+            ("2023-01-15T10:10:10-0800", "2023-01-16T10:10:10-0800"),
+            ("2023-01-17T10:10:10-0800", "2023-01-18T10:10:10-0800"),
+            ("2023-01-19T10:10:10-0800", "2023-01-20T10:10:10-0800"),
+        ];
+        for (i, (start, end)) in ts.iter().enumerate() {
+            let (rsvp, _) = make_reservation(
+                migrated_pool.clone(),
+                "test-user",
+                "test-resource",
+                start,
+                end,
+                &format!("test-note-{}", i),
+            )
+            .await;
+            rsvps.push(rsvp);
+        }
+        rsvps
     }
 
     async fn make_reservation(
