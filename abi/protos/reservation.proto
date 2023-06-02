@@ -1,6 +1,5 @@
 syntax = "proto3";
 package reservation;
-
 import "google/protobuf/timestamp.proto";
 
 // reservation status for a given time period

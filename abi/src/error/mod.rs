@@ -28,6 +28,9 @@ pub enum Error {
     #[error("Invalid resource id: {0}")]
     InvalidResourceId(String),
 
+    #[error("missing argument: {0}")]
+    MissingArgument(String),
+
     #[error("Not found the reservation by given condition")]
     NotFound,
 
@@ -67,6 +70,9 @@ impl PartialEq for Error {
             (Self::ConflictReservation(a), Self::ConflictReservation(b)) => a == b,
             (Self::NotFound, Self::NotFound) => true,
             (Self::Unknown, Self::Unknown) => true,
+            (Self::ConfigReadError, Self::ConfigReadError) => true,
+            (Self::ConfigParseError, Self::ConfigParseError) => true,
+            (Self::MissingArgument(a), Self::MissingArgument(b)) => a == b,
             _ => false,
         }
     }
@@ -81,7 +87,8 @@ impl From<Error> for tonic::Status {
             Error::InvalidTimespan
             | Error::InvalidUserId(_)
             | Error::InvalidReservationId(_)
-            | Error::InvalidResourceId(_) => Status::invalid_argument(err.to_string()),
+            | Error::InvalidResourceId(_)
+            | Error::MissingArgument(_) => Status::invalid_argument(err.to_string()),
             Error::NotFound => Status::not_found("not found the reservation by given condition"),
             Error::ConflictReservation(info) => {
                 Status::already_exists(format!("Conflict reservation: {:?}", info))

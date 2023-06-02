@@ -5,7 +5,10 @@ use abi::{
 };
 
 use async_trait::async_trait;
-use sqlx::{pool::PoolOptions, PgPool, Row};
+use futures::stream::StreamExt;
+use sqlx::{pool::PoolOptions, Either, PgPool, Row};
+use tokio::sync::mpsc;
+use tracing::{info, warn};
 
 impl ReservationManager {
     pub fn new(pool: PgPool) -> Self {
@@ -69,13 +72,13 @@ impl Rsvp for ReservationManager {
         Ok(rsvp)
     }
 
-    async fn delete(&self, id: ReservationId) -> Result<(), Error> {
+    async fn delete(&self, id: ReservationId) -> Result<Reservation, Error> {
         id.validate()?;
 
-        let sql = "DELETE FROM rsvp.reservations WHERE id = $1";
+        let sql = "DELETE FROM rsvp.reservations WHERE id = $1 RETURNING *";
+        let rsvp = sqlx::query_as(sql).bind(id).fetch_one(&self.pool).await?;
 
-        sqlx::query(sql).bind(id).execute(&self.pool).await?;
-        Ok(())
+        Ok(rsvp)
     }
 
     async fn get(&self, id: ReservationId) -> Result<Reservation, Error> {
@@ -83,30 +86,58 @@ impl Rsvp for ReservationManager {
 
         let sql = "SELECT * FROM rsvp.reservations WHERE id = $1";
         let rsvp = sqlx::query_as(sql).bind(id).fetch_one(&self.pool).await?;
+
         Ok(rsvp)
     }
 
-    async fn query(&self, query: ReservationQuery) -> Result<Vec<Reservation>, Error> {
-        let uid = str_to_option(&query.user_id);
-        let rid = str_to_option(&query.resource_id);
+    async fn query(&self, query: ReservationQuery) -> mpsc::Receiver<Result<Reservation, Error>> {
+        let uid = string_to_option(&query.user_id);
+        let rid = string_to_option(&query.resource_id);
         let timespan = query.get_timespan();
         let status =
             ReservationStatus::from_i32(query.status).unwrap_or(ReservationStatus::Pending);
 
-        let rsvps = sqlx::query_as(
-            "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7)",
-        )
-        .bind(uid)
-        .bind(rid)
-        .bind(timespan)
-        .bind(status.to_string())
-        .bind(query.page)
-        .bind(query.desc)
-        .bind(query.page_size)
-        .fetch_all(&self.pool)
-        .await?;
+        let pool = self.pool.clone();
 
-        Ok(rsvps)
+        // use channel to send query result
+        let (tx, rx) = mpsc::channel(128);
+
+        tokio::spawn(async move {
+            let mut rsvps = sqlx::query_as(
+                "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7)",
+            )
+            .bind(uid)
+            .bind(rid)
+            .bind(timespan)
+            .bind(status.to_string())
+            .bind(query.page)
+            .bind(query.desc)
+            .bind(query.page_size)
+            .fetch_many(&pool);
+
+            while let Some(ret) = rsvps.next().await {
+                match ret {
+                    Ok(Either::Left(r)) => {
+                        info!("Query result: {:?}", r);
+                    }
+                    Ok(Either::Right(r)) => {
+                        if tx.send(Ok(r)).await.is_err() {
+                            // rx is dropped, so client disconnected
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Query error: {:?}", e);
+                        if tx.send(Err(e.into())).await.is_err() {
+                            // rx is dropped, so client disconnected
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        rx
     }
 
     /// filter reservations by user_id, resource_id, status, cursor, desc, page_size
@@ -170,6 +201,14 @@ fn str_to_option(s: &str) -> Option<&str> {
         None
     } else {
         Some(s)
+    }
+}
+
+fn string_to_option(s: &str) -> Option<String> {
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.to_string())
     }
 }
 
@@ -434,15 +473,15 @@ mod tests {
             .build()
             .unwrap();
 
-        let rsvps = manager.query(query.clone()).await.unwrap();
+        let mut rx = manager.query(query.clone()).await;
 
-        assert_eq!(rsvps.len(), 1);
-        assert_eq!(rsvps[0], rsvp);
+        assert_eq!(rx.recv().await.unwrap().unwrap(), rsvp);
+        assert_eq!(rx.recv().await, None);
 
         // 将查到的数据删除,再查询,查不到数据
         manager.delete(rsvp.id).await.unwrap();
-        let rsvps = manager.query(query).await.unwrap();
-        assert_eq!(rsvps.len(), 0);
+        let mut rx = manager.query(query).await;
+        assert_eq!(rx.recv().await, None);
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
