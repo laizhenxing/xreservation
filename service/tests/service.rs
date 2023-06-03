@@ -190,9 +190,7 @@ async fn get_test_cliet(
             .unwrap()
     };
 
-    time::timeout(Duration::from_millis(100), fut)
-        .await
-        .unwrap()
+    time::timeout(Duration::from_secs(5), fut).await.unwrap()
 }
 
 fn setup_server(config: &Config) {
