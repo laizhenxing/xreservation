@@ -124,18 +124,10 @@ pub struct ReservationQuery {
     #[prost(message, optional, tag = "5")]
     #[builder(setter(strip_option))]
     pub end: ::core::option::Option<::prost_types::Timestamp>,
-    /// page number for a reservation query, if 0, use 1 for page number
-    #[prost(int32, tag = "6")]
-    #[builder(setter(into), default)]
-    pub page: i32,
     /// is_desc for a reservation query, if true, use desc for order, otherwise use asc
     #[prost(bool, tag = "7")]
     #[builder(setter(into), default)]
     pub desc: bool,
-    /// page size for a reservation query, if 0, use 10 for page size
-    #[prost(int32, tag = "8")]
-    #[builder(setter(into), default)]
-    pub page_size: i32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

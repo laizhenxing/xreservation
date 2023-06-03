@@ -1,7 +1,7 @@
 use crate::{ReservationManager, Rsvp};
 use abi::{
-    DbConfig, Error, FilterPager, Reservation, ReservationFilter, ReservationId, ReservationQuery,
-    ReservationStatus, Validator,
+    convert_to_utc_time, DbConfig, Error, FilterPager, Reservation, ReservationFilter,
+    ReservationId, ReservationQuery, ReservationStatus, Validator,
 };
 
 use async_trait::async_trait;
@@ -93,7 +93,8 @@ impl Rsvp for ReservationManager {
     async fn query(&self, query: ReservationQuery) -> mpsc::Receiver<Result<Reservation, Error>> {
         let uid = string_to_option(&query.user_id);
         let rid = string_to_option(&query.resource_id);
-        let timespan = query.get_timespan();
+        let start = query.start.as_ref().map(convert_to_utc_time);
+        let end = query.end.as_ref().map(convert_to_utc_time);
         let status =
             ReservationStatus::from_i32(query.status).unwrap_or(ReservationStatus::Pending);
 
@@ -104,17 +105,17 @@ impl Rsvp for ReservationManager {
 
         tokio::spawn(async move {
             let mut rsvps = sqlx::query_as(
-                "SELECT * FROM rsvp.query($1, $2, $3, $4::rsvp.reservation_status, $5, $6, $7)",
+                "SELECT * FROM rsvp.query($1, $2, $3, $4, $5::rsvp.reservation_status, $6)",
             )
             .bind(uid)
             .bind(rid)
-            .bind(timespan)
+            .bind(start)
+            .bind(end)
             .bind(status.to_string())
-            .bind(query.page)
             .bind(query.desc)
-            .bind(query.page_size)
             .fetch_many(&pool);
 
+            // send query result to channel
             while let Some(ret) = rsvps.next().await {
                 match ret {
                     Ok(Either::Left(r)) => {
