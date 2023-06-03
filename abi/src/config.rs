@@ -57,10 +57,14 @@ impl DbConfig {
 impl ServerConfig {
     pub fn url(&self, is_https: bool) -> String {
         if is_https {
-            format!("https://{}:{}", self.host, self.port)
+            format!("https://{}", self.server_url())
         } else {
-            format!("http://{}:{}", self.host, self.port)
+            format!("http://{}", self.server_url())
         }
+    }
+
+    pub fn server_url(&self) -> String {
+        format!("{}:{}", self.host, self.port)
     }
 }
 

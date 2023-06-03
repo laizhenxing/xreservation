@@ -1,4 +1,6 @@
 mod service;
+#[cfg(test)]
+mod test_utils;
 
 use abi::{Error, Reservation};
 use futures::Stream;

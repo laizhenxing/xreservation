@@ -18,7 +18,7 @@ use tonic::{async_trait, transport::Server, Request, Response, Status};
 use crate::{ReservationStream, RsvpService, TonicReceiverStream};
 
 pub async fn start_server(config: &Config) -> Result<(), anyhow::Error> {
-    let addr = format!("{}:{}", config.server.host, config.server.port).parse()?;
+    let addr = config.server.server_url().parse()?;
 
     let service = RsvpService::from_config(config).await?;
     let service = ReservationServiceServer::new(service);
@@ -175,93 +175,14 @@ impl<T> Stream for TonicReceiverStream<T> {
 
 #[cfg(test)]
 mod tests {
-    use abi::{Config, Reservation};
-    use lazy_static::lazy_static;
-    use sqlx::{postgres::PgConnection, Connection, Executor};
-    use std::{sync::Arc, thread};
-    use tokio::runtime::Runtime;
-    use uuid::Uuid;
+    use crate::test_utils::TestConfig;
+    use abi::Reservation;
 
     use super::*;
 
-    lazy_static! {
-        /// Runtime is a tokio runtime for running async tests.
-        /// runtime 使异步的接口可以在同步的测试中使用
-        static ref TEST_RT: Runtime = Runtime::new().unwrap();
-    }
-
-    /// TestConfig is a helper struct for testing. It's for unbinding the database connection[sqlx]
-    /// It creates a new database for each test and drops it after the test.
-    struct TestConfig {
-        config: Arc<Config>,
-    }
-
-    impl TestConfig {
-        fn new() -> Self {
-            let mut config = Config::load("fitures/config.yml").unwrap();
-            let uuid = Uuid::new_v4();
-            let old_url = config.db.url();
-            let dbname = format!("test_{}", uuid);
-            config.db.dbname = dbname.clone();
-
-            let url = config.db.url();
-
-            // create a thread to create database for test.
-            thread::spawn(move || {
-                TEST_RT.block_on(async move {
-                    // connect for creating database
-                    let mut conn = PgConnection::connect(&old_url).await.unwrap();
-                    conn.execute(format!(r#"CREATE DATABASE "{}""#, dbname).as_str())
-                        .await
-                        .unwrap();
-                    // connect for migration
-                    let mut conn = PgConnection::connect(&url).await.unwrap();
-                    sqlx::migrate!("../migrations")
-                        .run(&mut conn)
-                        .await
-                        .unwrap();
-                });
-            })
-            .join()
-            .expect("failed to create database");
-
-            Self {
-                config: Arc::new(config),
-            }
-        }
-    }
-
-    /// Drop the database after the test.
-    /// when finished the test, it drops the database.
-    impl Drop for TestConfig {
-        fn drop(&mut self) {
-            let url = self.config.db.server_url();
-            let dbname = self.config.db.dbname.clone();
-            thread::spawn(move || {
-                TEST_RT.block_on(async move {
-                    let mut conn = PgConnection::connect(&url).await.unwrap();
-                    // terminate all other connections。关闭数据库连接
-                    sqlx::query(&format!(
-                        r#"SELECT pg_terminate_backend(pid) FROM pg_stat_activity
-                    WHERE pid <> pg_backend_pid() AND datname = '{}'"#,
-                        dbname
-                    ))
-                    .execute(&mut conn)
-                    .await
-                    .expect("Terminate all other connections");
-                    conn.execute(format!(r#"DROP DATABASE "{}""#, dbname).as_str())
-                        .await
-                        .expect("Error while querying the drop database");
-                });
-            })
-            .join()
-            .expect("failed to drop database");
-        }
-    }
-
     #[tokio::test]
     async fn rpc_reserve_should_work() {
-        let config = TestConfig::new();
+        let config = TestConfig::default();
         let service = RsvpService::from_config(&config.config).await.unwrap();
         let reservation = Reservation::new(
             "xxl",

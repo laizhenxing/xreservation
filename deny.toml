@@ -49,6 +49,7 @@ notice = "warn"
 # output a note when they are encountered.
 ignore = [
     #"RUSTSEC-0000-0000",
+    #"RUSTSEC-2020-0071",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -193,9 +194,15 @@ unknown-registry = "warn"
 unknown-git = "warn"
 # List of URLs for allowed crate registries. Defaults to the crates.io index
 # if not specified. If it is specified but empty, no registries are allowed.
-allow-registry = ["https://github.com/rust-lang/crates.io-index", "git://mirrors.ustc.edu.cn/crates.io-index"]
+allow-registry = [
+  "https://github.com/rust-lang/crates.io-index",
+  "git://mirrors.ustc.edu.cn/crates.io-index",
+]
 # List of URLs for allowed Git repositories
-allow-git = []
+allow-git = [
+  "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git",
+  "https://code.aliyun.com/rustcc/crates.io-index.git",
+]
 
 [sources.allow-org]
 # 1 or more github.com organizations to allow git sources for

@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 abi = { version = "0.1.0", path = "../abi" }
 async-trait = "0.1.68"
-chrono = { version = "0.4.24", features = ["serde"] }
+chrono = { version = "0.4.24", default-features = false, features = ["serde"] }
 futures = { version = "0.3.28", default-features = false }
 sqlx = { version = "0.6.3", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"] }
 thiserror = "1.0.40"

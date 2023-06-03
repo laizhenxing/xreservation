@@ -101,7 +101,7 @@ BEGIN
       WHEN is_desc THEN 'DESC'
       ELSE 'ASC'
     END,
-    page_size
+    page_size + 1
   );
 
   -- log the _sql
