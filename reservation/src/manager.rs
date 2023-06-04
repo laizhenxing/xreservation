@@ -1,7 +1,7 @@
 use crate::{ReservationManager, Rsvp};
 use abi::{
-    convert_to_utc_time, DbConfig, Error, FilterPager, Reservation, ReservationFilter,
-    ReservationId, ReservationQuery, ReservationStatus, Validator,
+    convert_to_utc_time, DbConfig, Error, FilterPager, Normalizer, Reservation, ReservationFilter,
+    ReservationId, ReservationQuery, ReservationStatus, ToSql, Validator,
 };
 
 use async_trait::async_trait;
@@ -144,64 +144,16 @@ impl Rsvp for ReservationManager {
     /// filter reservations by user_id, resource_id, status, cursor, desc, page_size
     async fn filter(
         &self,
-        filter: ReservationFilter,
+        mut filter: ReservationFilter,
     ) -> Result<(FilterPager, Vec<Reservation>), Error> {
-        let uid = str_to_option(&filter.user_id);
-        let rid = str_to_option(&filter.resource_id);
-        let status =
-            ReservationStatus::from_i32(filter.status).unwrap_or(ReservationStatus::Pending);
-        // page_size must between 10 and 100
-        let page_size = if filter.page_size < 10 || filter.page_size > 100 {
-            10
-        } else {
-            filter.page_size
-        };
+        filter.normalize()?;
 
-        let rsvps: Vec<Reservation> = sqlx::query_as(
-            "SELECT * FROM rsvp.filter($1, $2, $3::rsvp.reservation_status, $4, $5, $6)",
-        )
-        .bind(uid)
-        .bind(rid)
-        .bind(status.to_string())
-        .bind(filter.cursor)
-        .bind(filter.desc)
-        .bind(page_size)
-        .fetch_all(&self.pool)
-        .await?;
+        let sql = filter.to_sql();
+        let rsvps: Vec<Reservation> = sqlx::query_as(&sql).fetch_all(&self.pool).await?;
+        let mut rsvps = rsvps.into_iter().collect();
 
-        // TODO: incomplete FilterPager
-        // if the first id is current cursor, then there is have prev, start from 1
-        // if len - start > page_size, then there is have next, end at len-1
-        let has_pre = !rsvps.is_empty() && rsvps[0].id == filter.cursor;
-        let start = if has_pre { 1 } else { 0 };
-
-        let has_next = (rsvps.len() - start) as i32 > page_size;
-        let end = if has_next {
-            rsvps.len() - 1
-        } else {
-            rsvps.len()
-        };
-
-        let prev = if has_pre { rsvps[start - 1].id } else { -1 };
-        let next = if has_next { rsvps[end - 1].id } else { -1 };
-
-        let result = rsvps[start..end].to_vec();
-
-        let pager = FilterPager {
-            prev,
-            next,
-            // TODO: get total from an efficient way instead of query all
-            total: 0,
-        };
-        Ok((pager, result))
-    }
-}
-
-fn str_to_option(s: &str) -> Option<&str> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
+        let pager = filter.get_pager(&mut rsvps);
+        Ok((pager, rsvps.into()))
     }
 }
 
@@ -494,41 +446,45 @@ mod tests {
             .user_id("test-user")
             .resource_id("test-resource")
             .status(ReservationStatus::Pending as i32)
-            .cursor(0)
-            .desc(false)
             .build()
             .unwrap();
 
-        let (_pager, res) = manager.filter(filter).await.unwrap();
+        let (pager, res) = manager.filter(filter).await.unwrap();
         assert_eq!(rsvps.len(), res.len());
+        assert_eq!(pager.prev, None);
+        assert_eq!(pager.next, None);
 
         let filter = ReservationFilterBuilder::default()
             .user_id("test-user")
             .resource_id("test-resource")
             .status(ReservationStatus::Pending as i32)
-            .cursor(3)
+            .cursor(4)
             .desc(false)
             .build()
             .unwrap();
-        let (_pager, res) = manager.filter(filter).await.unwrap();
-        assert_eq!(rsvps.len() - 3, res.len());
+        let (pager, res) = manager.filter(filter).await.unwrap();
+        assert_eq!(7, res.len());
+        assert_eq!(pager.prev, Some(4));
+        assert_eq!(pager.next, None);
 
         let filter = ReservationFilterBuilder::default()
             .user_id("test-user")
             .resource_id("test-resource")
             .status(ReservationStatus::Pending as i32)
-            .cursor(3)
+            .cursor(4)
             .desc(true)
             .build()
             .unwrap();
-        let (_pager, res) = manager.filter(filter).await.unwrap();
-        assert_eq!(2, res.len());
+        let (pager, res) = manager.filter(filter).await.unwrap();
+        assert_eq!(4, res.len());
+        assert_eq!(pager.next, None);
+        assert_eq!(pager.prev, Some(4));
     }
 
     #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
     async fn filter_reservation_with_null_cursor_should_work() {
         let manager = ReservationManager::new(migrated_pool.clone());
-        let rsvps = make_reservations(migrated_pool.clone()).await;
+        let _rsvps = make_reservations(migrated_pool.clone()).await;
         let filter_asc = ReservationFilterBuilder::default()
             .user_id("test-user")
             .resource_id("test-resource")
@@ -545,11 +501,16 @@ mod tests {
             .desc(true)
             .build()
             .unwrap();
-        let (_asc_pager, res_asc) = manager.filter(filter_asc).await.unwrap();
-        let (_desc_pager, res_desc) = manager.filter(filter_desc).await.unwrap();
+        let (asc_pager, res_asc) = manager.filter(filter_asc).await.unwrap();
+        let (desc_pager, res_desc) = manager.filter(filter_desc).await.unwrap();
 
-        assert_eq!(rsvps.len(), res_asc.len());
-        assert_eq!(res_desc.len(), 0);
+        assert_eq!(res_asc.len(), 10);
+        assert_eq!(asc_pager.prev, None);
+        assert_eq!(asc_pager.next, None);
+
+        assert_eq!(res_desc.len(), 10);
+        assert_eq!(desc_pager.prev, None);
+        assert_eq!(desc_pager.next, None);
     }
 
     #[allow(dead_code)]

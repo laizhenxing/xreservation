@@ -4,6 +4,7 @@ use xsqlx_db_tester::TestDB;
 
 /// TestConfig is a helper struct for testing. It's for unbinding the database connection[sqlx]
 /// It creates a new database for each test and drops it after the test.
+#[cfg(test)]
 pub struct TestConfig {
     #[allow(dead_code)]
     tdb: TestDB,

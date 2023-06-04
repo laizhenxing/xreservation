@@ -164,12 +164,12 @@ async fn grpc_filter_should_work() {
     let rsvps = ret.reservations;
     let pager = ret.pager.unwrap();
 
-    assert_eq!(rsvps.len(), 14);
-    assert_eq!(rsvps[0].id, 5);
-    assert_eq!(rsvps[13].id, 18);
+    assert_eq!(rsvps.len(), 16);
+    assert_eq!(rsvps[0].id, 4);
+    assert_eq!(rsvps[13].id, 17);
 
-    assert_eq!(pager.prev, -1);
-    assert_eq!(pager.next, 18);
+    assert_eq!(pager.prev, Some(4));
+    assert_eq!(pager.next, Some(19));
 }
 
 async fn get_test_cliet(

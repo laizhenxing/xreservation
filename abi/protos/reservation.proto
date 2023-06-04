@@ -121,9 +121,9 @@ message ReservationFilter {
     // use status to filter reservations, if unknown, return all reservations
     ReservationStatus status = 3;
     // cursor means the start id for a reservation filter
-    int64 cursor = 4;
+    optional int64 cursor = 4;
     // page size for a reservation filter
-    int32 page_size = 5;
+    int64 page_size = 5;
     // desc for reservations sort
     bool desc = 6;
 }
@@ -134,9 +134,9 @@ message FilterRequest {
 }
 
 message FilterPager {
-    int64 prev = 1;
-    int64 next = 2;
-    int64 total = 3;
+    optional int64 prev = 1;
+    optional int64 next = 2;
+    optional int64 total = 3;
 }
 
 message FilterResponse {

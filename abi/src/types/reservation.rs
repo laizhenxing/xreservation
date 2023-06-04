@@ -6,7 +6,9 @@ use sqlx::{
 use std::ops::Bound;
 
 use super::{get_timespan, validate_range};
-use crate::{convert_to_timestamp, Error, Reservation, ReservationStatus, RsvpStatus, Validator};
+use crate::{
+    convert_to_timestamp, Error, Id, Reservation, ReservationStatus, RsvpStatus, Validator,
+};
 
 impl Reservation {
     pub fn new(
@@ -29,6 +31,12 @@ impl Reservation {
 
     pub fn get_timespan(&self) -> PgRange<DateTime<Utc>> {
         get_timespan(self.start.as_ref(), self.end.as_ref())
+    }
+}
+
+impl Id for Reservation {
+    fn id(&self) -> i64 {
+        self.id
     }
 }
 

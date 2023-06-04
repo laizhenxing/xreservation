@@ -31,6 +31,15 @@ pub enum Error {
     #[error("missing argument: {0}")]
     MissingArgument(String),
 
+    #[error("Invalid page size: {0}")]
+    InvalidPageSize(i64),
+
+    #[error("Invalid cursor: {0}")]
+    InvalidCursor(i64),
+
+    #[error("Invalid status: {0}")]
+    InvalidStatus(i32),
+
     #[error("Not found the reservation by given condition")]
     NotFound,
 
@@ -73,6 +82,9 @@ impl PartialEq for Error {
             (Self::ConfigReadError, Self::ConfigReadError) => true,
             (Self::ConfigParseError, Self::ConfigParseError) => true,
             (Self::MissingArgument(a), Self::MissingArgument(b)) => a == b,
+            (Self::InvalidPageSize(a), Self::InvalidPageSize(b)) => a == b,
+            (Self::InvalidCursor(a), Self::InvalidCursor(b)) => a == b,
+            (Self::InvalidStatus(a), Self::InvalidStatus(b)) => a == b,
             _ => false,
         }
     }
@@ -88,7 +100,10 @@ impl From<Error> for tonic::Status {
             | Error::InvalidUserId(_)
             | Error::InvalidReservationId(_)
             | Error::InvalidResourceId(_)
-            | Error::MissingArgument(_) => Status::invalid_argument(err.to_string()),
+            | Error::MissingArgument(_)
+            | Error::InvalidCursor(_)
+            | Error::InvalidPageSize(_)
+            | Error::InvalidStatus(_) => Status::invalid_argument(err.to_string()),
             Error::NotFound => Status::not_found("not found the reservation by given condition"),
             Error::ConflictReservation(info) => {
                 Status::already_exists(format!("Conflict reservation: {:?}", info))

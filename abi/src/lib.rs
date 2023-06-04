@@ -1,11 +1,13 @@
 mod config;
 mod error;
+mod pager;
 mod pb;
 mod types;
 mod utils;
 
 pub use config::*;
 pub use error::{Error, ReservationConflict, ReservationConflictInfo, ReservationWindow};
+pub use pager::*;
 pub use pb::*;
 pub use utils::*;
 
@@ -17,6 +19,20 @@ pub type UserId = String;
 
 pub trait Validator {
     fn validate(&self) -> Result<(), Error>;
+}
+
+pub trait Normalizer: Validator {
+    fn normalize(&mut self) -> Result<(), Error> {
+        self.validate()?;
+        self.do_normalize();
+        Ok(())
+    }
+
+    fn do_normalize(&mut self);
+}
+
+pub trait ToSql {
+    fn to_sql(&self) -> String;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
