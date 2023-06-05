@@ -124,8 +124,8 @@ pub struct ReservationQuery {
     #[prost(message, optional, tag = "5")]
     #[builder(setter(strip_option))]
     pub end: ::core::option::Option<::prost_types::Timestamp>,
-    /// is_desc for a reservation query, if true, use desc for order, otherwise use asc
-    #[prost(bool, tag = "7")]
+    /// desc for a reservation query, if true, use desc for order, otherwise use asc
+    #[prost(bool, tag = "6")]
     #[builder(setter(into), default)]
     pub desc: bool,
 }

@@ -20,3 +20,4 @@ dotenv = "0.15.0"
 prost-types = "0.11.9"
 sqlx-database-tester = { version = "0.4.2", features = ["runtime-tokio"] }
 tokio = { version = "1.28.1", features = ["full"] }
+xsqlx-db-tester = "0.1.3"

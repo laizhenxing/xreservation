@@ -1,7 +1,7 @@
 use crate::{ReservationManager, Rsvp};
 use abi::{
-    convert_to_utc_time, DbConfig, Error, FilterPager, Normalizer, Reservation, ReservationFilter,
-    ReservationId, ReservationQuery, ReservationStatus, ToSql, Validator,
+    DbConfig, Error, FilterPager, Normalizer, Reservation, ReservationFilter, ReservationId,
+    ReservationQuery, ReservationStatus, ToSql, Validator,
 };
 
 use async_trait::async_trait;
@@ -91,29 +91,14 @@ impl Rsvp for ReservationManager {
     }
 
     async fn query(&self, query: ReservationQuery) -> mpsc::Receiver<Result<Reservation, Error>> {
-        let uid = string_to_option(&query.user_id);
-        let rid = string_to_option(&query.resource_id);
-        let start = query.start.as_ref().map(convert_to_utc_time);
-        let end = query.end.as_ref().map(convert_to_utc_time);
-        let status =
-            ReservationStatus::from_i32(query.status).unwrap_or(ReservationStatus::Pending);
-
         let pool = self.pool.clone();
 
         // use channel to send query result
         let (tx, rx) = mpsc::channel(128);
 
         tokio::spawn(async move {
-            let mut rsvps = sqlx::query_as(
-                "SELECT * FROM rsvp.query($1, $2, $3, $4, $5::rsvp.reservation_status, $6)",
-            )
-            .bind(uid)
-            .bind(rid)
-            .bind(start)
-            .bind(end)
-            .bind(status.to_string())
-            .bind(query.desc)
-            .fetch_many(&pool);
+            let sql = query.to_sql();
+            let mut rsvps = sqlx::query_as(&sql).fetch_many(&pool);
 
             // send query result to channel
             while let Some(ret) = rsvps.next().await {
@@ -157,14 +142,6 @@ impl Rsvp for ReservationManager {
     }
 }
 
-fn string_to_option(s: &str) -> Option<String> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s.to_string())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,10 +154,20 @@ mod tests {
     use chrono::FixedOffset;
     use prost_types::Timestamp;
     use sqlx::PgPool;
+    use xsqlx_db_tester::TestDB;
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    fn get_db() -> TestDB {
+        TestDB::new(
+            "postgres://postgres:postgres@localhost:5432",
+            "../migrations",
+        )
+    }
+
+    #[tokio::test]
     async fn reserve_should_work_with_valid_window() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let start: DateTime<FixedOffset> = "2023-1-1T10:10:10-0700".parse().unwrap();
         let end: DateTime<FixedOffset> = "2023-1-4T10:10:10-0700".parse().unwrap();
@@ -197,9 +184,11 @@ mod tests {
         assert_eq!(rsvp.id, 1);
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn reserve_should_fail_with_invalid_window() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let start: DateTime<FixedOffset> = "2023-1-1T10:10:10-0700".parse().unwrap();
         let end: DateTime<FixedOffset> = "2022-1-1T10:10:10-0700".parse().unwrap();
@@ -248,9 +237,11 @@ mod tests {
         assert_eq!(err, Error::ConflictReservation(info));
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn reserve_with_empty_start_timestamp_should_fail() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let rsvp = Reservation {
             user_id: "test-user".to_string(),
@@ -265,9 +256,11 @@ mod tests {
         assert!(matches!(err, Error::InvalidTimespan));
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn reserve_with_empty_end_timestamp_should_fail() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let rsvp = Reservation {
             user_id: "test-user".to_string(),
@@ -282,9 +275,11 @@ mod tests {
         assert!(matches!(err, Error::InvalidTimespan));
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn reserver_with_empty_user_id_should_fail() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let rsvp = Reservation::default();
 
@@ -292,9 +287,11 @@ mod tests {
         assert!(matches!(err, Error::InvalidUserId(..)));
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn reserver_with_empty_resource_id_should_fail() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let rsvp = Reservation {
             user_id: "test-user".to_string(),
@@ -305,10 +302,12 @@ mod tests {
         assert!(matches!(err, Error::InvalidResourceId(..)));
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn change_status_should_work() {
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
         let (rsvp, manager) = make_reservation(
-            migrated_pool.clone(),
+            pool.clone(),
             "test-user",
             "test-resource",
             "2023-1-1T10:10:10-0700",
@@ -321,9 +320,11 @@ mod tests {
         assert_eq!(rsvp.status, ReservationStatus::Confirmed as i32);
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn change_status_should_fail_with_invalid_id() {
-        let manager = ReservationManager::new(migrated_pool.clone());
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
 
         let err = manager.change_status(0).await.unwrap_err();
         assert_eq!(err, Error::InvalidReservationId(0));
@@ -332,10 +333,12 @@ mod tests {
         assert_eq!(err, Error::NotFound);
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn update_note_should_work() {
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
         let (rsvp, manager) = make_reservation(
-            migrated_pool.clone(),
+            pool.clone(),
             "test-user",
             "test-resource",
             "2023-1-1T10:10:10-0700",
@@ -351,10 +354,12 @@ mod tests {
         assert_eq!(rsvp.note, "new-note".to_string());
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn get_reservation_should_work() {
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
         let (rsvp, manager) = make_reservation(
-            migrated_pool.clone(),
+            pool.clone(),
             "test-user",
             "test-resource",
             "2023-1-1T10:10:10-0700",
@@ -383,10 +388,12 @@ mod tests {
         assert_eq!(rsvp.status, ReservationStatus::Pending as i32);
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn delete_reservation_should_work() {
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
         let (rsvp, manager) = make_reservation(
-            migrated_pool.clone(),
+            pool.clone(),
             "test-user",
             "test-resource",
             "2023-1-1T10:10:10-0700",
@@ -401,10 +408,12 @@ mod tests {
         assert_eq!(err, Error::NotFound);
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn query_reservations_should_work() {
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
         let (rsvp, manager) = make_reservation(
-            migrated_pool.clone(),
+            pool.clone(),
             "test-user",
             "test-resource",
             "2023-1-1T10:10:10-0700",
@@ -437,10 +446,12 @@ mod tests {
         assert_eq!(rx.recv().await, None);
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn filter_reservation_should_work() {
-        let manager = ReservationManager::new(migrated_pool.clone());
-        let rsvps = make_reservations(migrated_pool.clone()).await;
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
+        let rsvps = make_reservations(pool.clone()).await;
 
         let filter = ReservationFilterBuilder::default()
             .user_id("test-user")
@@ -481,10 +492,12 @@ mod tests {
         assert_eq!(pager.prev, Some(4));
     }
 
-    #[sqlx_database_tester::test(pool(variable = "migrated_pool", migrations = "../migrations"))]
+    #[tokio::test]
     async fn filter_reservation_with_null_cursor_should_work() {
-        let manager = ReservationManager::new(migrated_pool.clone());
-        let _rsvps = make_reservations(migrated_pool.clone()).await;
+        let tdb = get_db();
+        let pool = tdb.get_pool().await;
+        let manager = ReservationManager::new(pool.clone());
+        let _rsvps = make_reservations(pool.clone()).await;
         let filter_asc = ReservationFilterBuilder::default()
             .user_id("test-user")
             .resource_id("test-resource")

@@ -69,3 +69,70 @@ impl Paginator for PageInfo {
         }
     }
 }
+
+#[cfg(test)]
+pub mod pager_test_utils {
+    use crate::pager::Id;
+    use std::collections::VecDeque;
+
+    pub struct TestId(i64);
+
+    impl Id for TestId {
+        fn id(&self) -> i64 {
+            self.0
+        }
+    }
+
+    pub fn generate_test_ids(start: i64, end: i64) -> VecDeque<TestId> {
+        (start..=end).map(TestId).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paginator_should_work() {
+        // first page
+        let page_info = PageInfo {
+            cursor: None,
+            page_size: 10,
+            desc: false,
+        };
+        let mut data = pager_test_utils::generate_test_ids(1, 11);
+
+        let pager = page_info.get_pager(&mut data);
+        assert_eq!(pager.prev, None);
+        assert_eq!(pager.next, Some(11));
+
+        {
+            let prev_page = page_info.prev_page(&pager);
+            assert!(prev_page.is_none());
+        }
+
+        // second page
+        let page = page_info.next_page(&pager).unwrap();
+        let mut data = pager_test_utils::generate_test_ids(11, 21);
+        let pager = page.get_pager(&mut data);
+        assert_eq!(pager.prev, Some(11));
+        assert_eq!(pager.next, Some(21));
+
+        {
+            let prev_page = page.prev_page(&pager);
+            assert_eq!(prev_page.unwrap().cursor, Some(11));
+        }
+
+        // third page
+        let page = page_info.next_page(&pager).unwrap();
+        let mut data = pager_test_utils::generate_test_ids(21, 30);
+        let pager = page.get_pager(&mut data);
+        assert_eq!(pager.prev, Some(21));
+        assert_eq!(pager.next, None);
+
+        {
+            let prev_page = page.prev_page(&pager);
+            assert_eq!(prev_page.unwrap().cursor, Some(21));
+        }
+    }
+}

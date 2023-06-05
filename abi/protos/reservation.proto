@@ -104,8 +104,8 @@ message ReservationQuery {
     google.protobuf.Timestamp start = 4;
     // end time for a reservation query, if 0, use Infity for end time
     google.protobuf.Timestamp end = 5;
-    // is_desc for a reservation query, if true, use desc for order, otherwise use asc
-    bool desc = 7;
+    // desc for a reservation query, if true, use desc for order, otherwise use asc
+    bool desc = 6;
 }
 
 message QueryRequest {
