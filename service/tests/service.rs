@@ -69,8 +69,16 @@ async fn grpc_query_should_work() {
 
     let query = ReservationQueryBuilder::default()
         .resource_id("test-rid-1")
-        .start("2023-01-09T10:10:10-0800".parse().unwrap())
-        .end("2023-01-10T10:10:10-0800".parse().unwrap())
+        .start(
+            "2023-01-09T10:10:10-0800"
+                .parse::<prost_types::Timestamp>()
+                .unwrap(),
+        )
+        .end(
+            "2023-01-10T10:10:10-0800"
+                .parse::<prost_types::Timestamp>()
+                .unwrap(),
+        )
         .build()
         .unwrap();
     let mut ret = client

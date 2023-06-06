@@ -1,9 +1,8 @@
-use std::collections::VecDeque;
-
 use crate::{
     Error, FilterPager, Id, Normalizer, PageInfo, Pager, Paginator, ReservationFilter,
     ReservationStatus, ToSql, Validator,
 };
+use std::collections::VecDeque;
 
 impl ReservationFilter {
     pub fn get_status(&self) -> ReservationStatus {
@@ -93,5 +92,198 @@ impl From<Pager> for FilterPager {
             next: pager.next,
             total: pager.total,
         }
+    }
+}
+
+#[cfg(test)]
+pub mod pager_test_utils {
+    use crate::pager::Id;
+    use std::collections::VecDeque;
+
+    pub struct TestId(i64);
+
+    impl Id for TestId {
+        fn id(&self) -> i64 {
+            self.0
+        }
+    }
+
+    pub fn generate_test_ids(start: i64, end: i64) -> VecDeque<TestId> {
+        (start..=end).map(TestId).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ReservationFilterBuilder;
+
+    #[test]
+    fn filter_with_wrong_page_size_should_fail() {
+        let filter = ReservationFilterBuilder::default()
+            .page_size(-1)
+            .build()
+            .unwrap();
+        let err = filter.validate().unwrap_err();
+        assert_eq!(err, Error::InvalidPageSize(-1));
+
+        let filter = ReservationFilterBuilder::default()
+            .page_size(101)
+            .build()
+            .unwrap();
+        let err = filter.validate().unwrap_err();
+        assert_eq!(err, Error::InvalidPageSize(101));
+
+        let filter = ReservationFilterBuilder::default()
+            .page_size(5)
+            .build()
+            .unwrap();
+        let err = filter.validate().unwrap_err();
+        assert_eq!(err, Error::InvalidPageSize(5));
+    }
+
+    #[test]
+    fn filter_with_right_page_size_should_work() {
+        let filter = ReservationFilterBuilder::default()
+            .page_size(10)
+            .build()
+            .unwrap();
+        assert!(filter.validate().is_ok());
+
+        let filter = ReservationFilterBuilder::default()
+            .page_size(100)
+            .build()
+            .unwrap();
+        assert!(filter.validate().is_ok());
+
+        let filter = ReservationFilterBuilder::default()
+            .page_size(50)
+            .build()
+            .unwrap();
+        assert!(filter.validate().is_ok());
+    }
+
+    #[test]
+    fn filter_with_wrong_cursor_should_fail() {
+        let filter = ReservationFilterBuilder::default()
+            .cursor(-1)
+            .build()
+            .unwrap();
+        let err = filter.validate().unwrap_err();
+        assert_eq!(err, Error::InvalidCursor(-1));
+    }
+
+    #[test]
+    fn filter_with_right_cursor_should_work() {
+        let filter = ReservationFilterBuilder::default()
+            .cursor(0)
+            .build()
+            .unwrap();
+        assert!(filter.validate().is_ok());
+
+        let filter = ReservationFilterBuilder::default()
+            .cursor(1)
+            .build()
+            .unwrap();
+        assert!(filter.validate().is_ok());
+
+        let filter = ReservationFilterBuilder::default()
+            .cursor(100)
+            .build()
+            .unwrap();
+        assert!(filter.validate().is_ok());
+    }
+
+    #[test]
+    fn get_pager_should_work() {
+        let filter = ReservationFilterBuilder::default().build().unwrap();
+        let page_info = filter.get_page_info();
+        assert!(page_info.cursor.is_none());
+        assert!(!page_info.desc);
+        assert_eq!(page_info.page_size, 10);
+
+        let mut data = pager_test_utils::generate_test_ids(1, 10);
+        let pager = page_info.get_pager(&mut data);
+        assert!(pager.prev.is_none());
+        assert!(pager.next.is_none());
+
+        let mut data = pager_test_utils::generate_test_ids(1, 11);
+        let pager = page_info.get_pager(&mut data);
+        assert!(pager.prev.is_none());
+        assert_eq!(pager.next, Some(11));
+
+        let filter = ReservationFilterBuilder::default()
+            .cursor(5)
+            .build()
+            .unwrap();
+        let page_info = filter.get_page_info();
+        let mut data = pager_test_utils::generate_test_ids(5, 10);
+        let pager = page_info.get_pager(&mut data);
+        assert_eq!(pager.prev, Some(5));
+        assert!(pager.next.is_none());
+
+        let mut data = pager_test_utils::generate_test_ids(5, 15);
+        let pager = page_info.get_pager(&mut data);
+        assert_eq!(pager.prev, Some(5));
+        assert_eq!(pager.next, Some(15));
+    }
+
+    #[test]
+    fn filter_to_sql_should_work() {
+        let mut filter = ReservationFilterBuilder::default()
+            .cursor(5)
+            .page_size(13)
+            .desc(true)
+            .build()
+            .unwrap();
+
+        filter.normalize().unwrap();
+
+        let sql = filter.to_sql();
+        assert_eq!(
+            sql,
+            "SELECT * FROM rsvp.reservations WHERE TRUE AND status = 'pending'::rsvp.reservation_status AND id <= 5 ORDER BY id DESC LIMIT 15"
+        );
+
+        let mut filter = ReservationFilterBuilder::default()
+            .cursor(2)
+            .user_id("test-uid-1")
+            .page_size(12)
+            .desc(false)
+            .build()
+            .unwrap();
+        filter.normalize().unwrap();
+
+        let sql = filter.to_sql();
+        assert_eq!(
+            sql,
+            "SELECT * FROM rsvp.reservations WHERE user_id = 'test-uid-1' AND status = 'pending'::rsvp.reservation_status AND id >= 2 ORDER BY id ASC LIMIT 14"
+        );
+
+        let mut filter = ReservationFilterBuilder::default()
+            .user_id("test-uid-1")
+            .page_size(12)
+            .desc(true)
+            .build()
+            .unwrap();
+        filter.normalize().unwrap();
+
+        let sql = filter.to_sql();
+        assert_eq!(
+            sql,
+            "SELECT * FROM rsvp.reservations WHERE user_id = 'test-uid-1' AND status = 'pending'::rsvp.reservation_status AND id <= 9223372036854775807 ORDER BY id DESC LIMIT 13"
+        );
+
+        let mut filter = ReservationFilterBuilder::default()
+            .user_id("test-uid-1")
+            .page_size(12)
+            .desc(false)
+            .build()
+            .unwrap();
+        filter.normalize().unwrap();
+        assert_eq!(
+            filter.to_sql(),
+            "SELECT * FROM rsvp.reservations WHERE user_id = 'test-uid-1' AND status = 'pending'::rsvp.reservation_status AND id >= 0 ORDER BY id ASC LIMIT 13"
+        );
     }
 }

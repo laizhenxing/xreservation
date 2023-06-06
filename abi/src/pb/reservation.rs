@@ -118,11 +118,11 @@ pub struct ReservationQuery {
     pub status: i32,
     /// start time for a reservation query, if 0, use Infity for start time
     #[prost(message, optional, tag = "4")]
-    #[builder(setter(strip_option))]
+    #[builder(setter(into, strip_option), default)]
     pub start: ::core::option::Option<::prost_types::Timestamp>,
     /// end time for a reservation query, if 0, use Infity for end time
     #[prost(message, optional, tag = "5")]
-    #[builder(setter(strip_option))]
+    #[builder(setter(into, strip_option), default)]
     pub end: ::core::option::Option<::prost_types::Timestamp>,
     /// desc for a reservation query, if true, use desc for order, otherwise use asc
     #[prost(bool, tag = "6")]

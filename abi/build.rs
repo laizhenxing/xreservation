@@ -20,7 +20,7 @@ fn main() {
             "reservation.ReservationFilter",
             &["resource_id", "user_id", "status", "desc"],
         )
-        .with_builder_option("reservation.ReservationQuery", &["start", "end"])
+        .with_builder_attributes(&["reservation.ReservationQuery"], &["start", "end"])
         // .with_builder_option("reservation.ReservationFilter", &["cursor"])
         .with_builder_attributes(&["reservation.ReservationFilter"], &["cursor"])
         .with_field_attribute(
